@@ -1,0 +1,23 @@
+{
+  "name": "kaito",
+  "version": "1.0.0",
+  "description": "Kaito — a general-purpose Discord bot (moderation, utility, fun, and a ragebait AI persona).",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "deploy:commands": "node deploy-commands.js",
+    "deploy:commands:global": "node deploy-commands.js --global"
+  },
+  "keywords": ["discord", "bot", "discord.js", "kaito"],
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "discord.js": "^14.27.0",
+    "dotenv": "^17.4.2"
+  }
+}

@@ -1,0 +1,8 @@
+# Normalise line endings: this repo is authored on Windows but built and run in
+# a Linux container, so everything is stored as LF in Git.
+* text=auto eol=lf
+
+# Never touch binaries.
+*.png binary
+*.jpg binary
+*.db binary
