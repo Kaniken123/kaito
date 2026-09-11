@@ -138,15 +138,32 @@ so they're versioned with the code rather than clicked into the dashboard.
    trial credits run out, and trial volumes are capped at 0.5 GB.
 3. **New Project** → **Deploy from GitHub repo** → pick `kaito`. Railway reads
    the `Dockerfile` and `railway.json` automatically. The first deploy may start
-   right away; that's fine, just finish the next two steps before relying on it.
+   right away and crash on missing variables; that's expected — finish the next
+   steps and it redeploys.
+
+   **`kaito` isn't in the list?** Railway's GitHub App can't see the repo.
+   - Railway → avatar → **Account Settings**: the connected GitHub account must
+     be the one that owns the repo.
+   - **https://github.com/settings/installations** → **Railway** → **Configure**
+     → **Repository access** → **All repositories**, or add `kaito` → **Save**.
+     If Railway isn't listed there, install it via **Configure GitHub App** on
+     Railway's "Deploy from GitHub repo" screen.
+   - Back in Railway, reload the repo list.
 4. **Attach the volume now**, before any real data exists — see step 8, option A.
-5. Service → **Variables** → **Raw Editor** → paste:
+5. Click the **kaito service** → **Variables** → **Raw Editor** → paste:
    ```
    DISCORD_TOKEN=your-production-token
    CLIENT_ID=your-production-client-id
    LOG_CHANNEL_ID=
    RAILWAY_RUN_UID=0
    ```
+   - **Then apply the change.** Railway stages variable edits instead of
+     applying them — click **Deploy** on the banner at the top of the canvas.
+     Until you do, the bot keeps crashing with "missing required environment
+     variables" even though the Variables tab shows the values.
+   - Put them on the **service**, not under Project Settings → Shared Variables;
+     shared variables don't reach a service unless you add them to it.
+   - Exactly `KEY=value`, no spaces around `=`, in the **production** environment.
    - `RAILWAY_RUN_UID=0` is **required** with a volume. Railway mounts volumes
      owned by root, and the Dockerfile runs as the unprivileged `node` user, so
      without it SQLite can't write to `/app/data` and Kaito crashes on boot.
@@ -157,32 +174,36 @@ so they're versioned with the code rather than clicked into the dashboard.
    and don't set a healthcheck path. Kaito is a worker, not a web server — it
    makes an outbound gateway connection and never listens on a port, so an HTTP
    healthcheck would fail every deploy.
-7. Register the slash commands globally using the Railway CLI, which injects the
-   production variables so the real token never lands in your local `.env`:
+7. Register the slash commands globally, from your machine. Registration is just
+   an API call to Discord — it doesn't need the database, so skip compiling
+   better-sqlite3 (which needs a C++ toolchain on Windows):
    ```
-   npm i -g @railway/cli
-   railway login
-   railway link                                # pick the kaito project + service
-   railway run npm run deploy:commands:global
+   npm ci --ignore-scripts
+   npm run deploy:commands:global
    ```
-   Global commands take up to an hour to appear. Re-run the last line only when
-   a command's definition changes — not on every deploy.
+   This reads `DISCORD_TOKEN` and `CLIENT_ID` from your local `.env`, so they must
+   be the **production** app's values, saved to disk.
+   - Global commands take up to an hour to appear; in Discord, **Ctrl+R**
+     reloads its cached command list. Re-run the second line only when a
+     command's definition changes — not on every deploy.
+   - ⚠️ With the production token in `.env`, **don't** `npm run dev` while
+     Railway is running (double replies — see the note at the top of this step).
 8. **Only if you ever registered guild commands with the *production* app**:
    clear them, or those commands show up twice in that server (once guild-scoped,
    once global). Commands registered by **Kaito Dev** belong to a different
    application and never clash — skip this step if you've only used the dev app.
+   With the production values in `.env` and `GUILD_ID` set to that server:
    ```
-   railway run node deploy-commands.js --clear
+   node deploy-commands.js --clear
    ```
-   `railway run` supplies the production `DISCORD_TOKEN` and `CLIENT_ID`; dotenv
-   never overrides variables that are already set, so `GUILD_ID` is still read
-   from your local `.env`. The net effect is clearing the production app's
-   commands from your test server.
+   Then empty `GUILD_ID` again.
 9. Check it's healthy:
-   - **Deployments → Logs** shows `Database ready at /app/data/kaito.db`
-     followed by `Kaito is online as Kaito#1234`.
+   - **Deployments** → latest → **Deploy Logs** (not Build Logs) shows
+     `Database ready at /app/data/kaito.db` followed by `Kaito is online as Kaito#1234`.
    - `/ping` answers in your server.
-   - `railway ssh` → `ls -la /app/data` lists `kaito.db`. Click **Redeploy**,
+   - *Optional, needs the [Railway CLI](https://docs.railway.com/guides/cli)*
+     (`npm i -g @railway/cli`, `railway login`, `railway link`):
+     `railway ssh` → `ls -la /app/data` lists `kaito.db`. Click **Redeploy**,
      then check again: the file should still be there with the same timestamp.
    - The *old* deployment's logs end with `Received SIGTERM` and
      `Database connection closed` — graceful shutdown is working.

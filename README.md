@@ -11,7 +11,16 @@ channel-bound AI persona. Built on **discord.js v14** with **slash commands only
 
 ## Requirements
 
-- **Node.js 20+** (developed on 24 LTS)
+- **Node.js 22+** (developed on 24 LTS) — better-sqlite3 v13 requires 22 or newer
+- **A C++ build toolchain**, only for a full local `npm install`. better-sqlite3 v13
+  publishes no prebuilt binaries, so it compiles SQLite on install:
+  - *Windows:* [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+    with the **Desktop development with C++** workload, plus Python 3
+  - *macOS:* `xcode-select --install`
+  - *Linux:* `python3`, `make`, `g++`
+
+  Not needed for deploying (the Dockerfile compiles it) or for registering
+  commands (`npm ci --ignore-scripts` is enough — see [SETUP.md](SETUP.md) step 7).
 - A Discord application + bot token → [SETUP.md](SETUP.md) steps 1–4
 - *Optional:* an LLM API key (ragebait mode) and Reddit credentials (`/cursedfood`)
 
