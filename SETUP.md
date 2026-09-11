@@ -123,18 +123,76 @@ uses proper app-only OAuth.
 
 ## 7. Deploy to Railway
 
-1. Push this repo to GitHub.
-2. **https://railway.app** → **New Project** → **Deploy from GitHub repo** → pick it.
-3. Railway detects the `Dockerfile` and builds automatically.
-4. **Variables** tab → add every value from your `.env`
-   (`DISCORD_TOKEN`, `CLIENT_ID`, `LOG_CHANNEL_ID`, LLM and Reddit keys…).
-   **Do not** set `GUILD_ID` in production — you want global commands there.
-5. Register commands globally once, from your machine:
-   `npm run deploy:commands:global`
-6. Check **Deployments → Logs** for `Kaito is online as Kaito#1234`.
+> **Use a separate bot for local development.** If `npm run dev` runs with the
+> same token while Railway is live, two copies of Kaito share one identity: every
+> command gets answered twice and one side fails with "interaction already
+> acknowledged". Repeat steps 1–4 to create a **Kaito Dev** application, keep
+> its token in your local `.env`, and give the real token only to Railway.
 
-> Kaito is a worker, not a web server — it makes an outbound gateway connection
-> and never listens on a port. If Railway asks you to expose one, don't.
+Deployment settings (Dockerfile builder, restart policy, shutdown grace period,
+which file changes trigger a redeploy) live in [`railway.json`](railway.json),
+so they're versioned with the code rather than clicked into the dashboard.
+
+1. Push this repo to GitHub.
+2. **https://railway.com** → sign up for the **Hobby** plan. Kaito runs 24/7, so
+   trial credits run out, and trial volumes are capped at 0.5 GB.
+3. **New Project** → **Deploy from GitHub repo** → pick `kaito`. Railway reads
+   the `Dockerfile` and `railway.json` automatically. The first deploy may start
+   right away; that's fine, just finish the next two steps before relying on it.
+4. **Attach the volume now**, before any real data exists — see step 8, option A.
+5. Service → **Variables** → **Raw Editor** → paste:
+   ```
+   DISCORD_TOKEN=your-production-token
+   CLIENT_ID=your-production-client-id
+   LOG_CHANNEL_ID=
+   RAILWAY_RUN_UID=0
+   ```
+   - `RAILWAY_RUN_UID=0` is **required** with a volume. Railway mounts volumes
+     owned by root, and the Dockerfile runs as the unprivileged `node` user, so
+     without it SQLite can't write to `/app/data` and Kaito crashes on boot.
+   - **Don't** set `GUILD_ID` — production registers commands globally.
+   - **Don't** set `DATABASE_PATH` — the Dockerfile already points it at the volume.
+   - Add the Reddit (step 6) and LLM (step 5) variables when you reach those features.
+6. Service → **Settings** → **Networking**: leave it with **no public domain**,
+   and don't set a healthcheck path. Kaito is a worker, not a web server — it
+   makes an outbound gateway connection and never listens on a port, so an HTTP
+   healthcheck would fail every deploy.
+7. Register the slash commands globally using the Railway CLI, which injects the
+   production variables so the real token never lands in your local `.env`:
+   ```
+   npm i -g @railway/cli
+   railway login
+   railway link                                # pick the kaito project + service
+   railway run npm run deploy:commands:global
+   ```
+   Global commands take up to an hour to appear. Re-run the last line only when
+   a command's definition changes — not on every deploy.
+8. **Only if you ever registered guild commands with the *production* app**:
+   clear them, or those commands show up twice in that server (once guild-scoped,
+   once global). Commands registered by **Kaito Dev** belong to a different
+   application and never clash — skip this step if you've only used the dev app.
+   ```
+   railway run node deploy-commands.js --clear
+   ```
+   `railway run` supplies the production `DISCORD_TOKEN` and `CLIENT_ID`; dotenv
+   never overrides variables that are already set, so `GUILD_ID` is still read
+   from your local `.env`. The net effect is clearing the production app's
+   commands from your test server.
+9. Check it's healthy:
+   - **Deployments → Logs** shows `Database ready at /app/data/kaito.db`
+     followed by `Kaito is online as Kaito#1234`.
+   - `/ping` answers in your server.
+   - `railway ssh` → `ls -la /app/data` lists `kaito.db`. Click **Redeploy**,
+     then check again: the file should still be there with the same timestamp.
+   - The *old* deployment's logs end with `Received SIGTERM` and
+     `Database connection closed` — graceful shutdown is working.
+
+From here, every push to `main` that touches code redeploys automatically.
+Docs-only pushes don't restart the bot (see `watchPatterns` in `railway.json`).
+
+**If a deploy keeps restarting:** open its logs. A missing required variable
+prints a clear message and exits; `railway.json` caps retries at 5 so it
+doesn't loop forever.
 
 ## 8. ⚠️ The SQLite / ephemeral filesystem caveat
 
@@ -143,13 +201,20 @@ container is rebuilt on every deploy, so **`data/kaito.db` is wiped each time** 
 warnings, reminders, polls, and ragebait config all vanish. It works, then
 silently resets, which is a miserable way to find out.
 
-**Option A — attach a persistent volume (easiest).**
-1. Railway project → your service → **Settings** → **Volumes** → **Add Volume**.
+**Option A — attach a persistent volume (easiest, and the right fit for Kaito).**
+1. In the project canvas, right-click the service → **Attach Volume**
+   (or `Ctrl/Cmd + K` → "volume").
 2. Mount path: `/app/data`.
-3. Set `DATABASE_PATH=/app/data/kaito.db` in Variables.
+3. Make sure `RAILWAY_RUN_UID=0` is set in Variables (step 7.5).
 4. Redeploy. The file now survives deploys.
-   Caveat: a volume binds the service to one instance — fine for a Discord bot,
-   which shouldn't run multiple copies anyway (you'd get duplicate replies).
+5. Service → **Backups** → turn on automated backups. A volume survives
+   redeploys, not accidents.
+
+Trade-offs of a volume, both fine for a Discord bot:
+- **One instance only** — Railway doesn't allow replicas with a volume. You
+  never want two copies of a bot anyway (duplicate replies).
+- **A few seconds offline per deploy** — Railway stops the old deployment before
+  starting the new one so two processes never write the same file.
 
 **Option B — move to hosted Postgres (scales properly).**
 1. Railway → **New** → **Database** → **PostgreSQL**; it injects `DATABASE_URL`.

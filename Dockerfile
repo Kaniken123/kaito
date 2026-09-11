@@ -20,9 +20,10 @@ COPY . .
 
 # Where the SQLite file lives. Mount a volume here in production, or the
 # database is wiped on every redeploy — see SETUP.md step 8.
+# No `VOLUME` instruction on purpose: Railway rejects Dockerfiles that use it,
+# and every host (Railway, Fly, a VPS) attaches the mount at runtime anyway.
 RUN mkdir -p /app/data
 ENV DATABASE_PATH=/app/data/kaito.db
-VOLUME ["/app/data"]
 
 # Drop root. The node image ships an unprivileged `node` user.
 RUN chown -R node:node /app

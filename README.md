@@ -96,8 +96,16 @@ and exits with a readable message if they're missing. Optional integrations
 
 ## Deployment
 
-`docker build -t kaito . && docker run --env-file .env kaito`, or push to Railway
-and set the variables in its dashboard — [SETUP.md](SETUP.md) step 7.
+Locally with Docker (the named volume keeps the database between runs):
+
+```bash
+docker build -t kaito .
+docker run --env-file .env -v kaito-data:/app/data kaito
+```
+
+On Railway: build and restart settings are in [`railway.json`](railway.json);
+the dashboard steps (volume, variables, command registration) are in
+[SETUP.md](SETUP.md) step 7.
 
 ⚠️ **Read [SETUP.md](SETUP.md) step 8 before deploying.** Hosted containers have
 an ephemeral filesystem and will silently wipe the SQLite database on every
