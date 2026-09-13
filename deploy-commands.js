@@ -25,7 +25,9 @@ const clear = args.includes('--clear');
 const global = args.includes('--global') || !config.guildId;
 
 async function main() {
-  const commands = clear ? [] : toApplicationCommands(loadCommands());
+  // strict: a command file that fails to load must abort registration. PUT
+  // replaces the whole set, so silently skipping one would delete it from Discord.
+  const commands = clear ? [] : toApplicationCommands(loadCommands({ strict: true }));
 
   const rest = new REST().setToken(config.token);
   const route = global

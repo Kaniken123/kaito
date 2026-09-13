@@ -77,6 +77,26 @@ function migrate() {
       FOREIGN KEY (poll_id) REFERENCES polls (id) ON DELETE CASCADE
     );
 
+    -- /trivia: one row per player per guild.
+    CREATE TABLE IF NOT EXISTS trivia_scores (
+      guild_id    TEXT    NOT NULL,
+      user_id     TEXT    NOT NULL,
+      correct     INTEGER NOT NULL DEFAULT 0,
+      answered    INTEGER NOT NULL DEFAULT 0,
+      updated_at  INTEGER NOT NULL,
+      PRIMARY KEY (guild_id, user_id)
+    );
+
+    -- /cursedfood: the picture of the day per UTC day, plus whether the
+    -- scheduled daily post for that day has already gone out (so a redeploy
+    -- mid-day can't post it twice).
+    CREATE TABLE IF NOT EXISTS cursed_food_days (
+      day               TEXT    PRIMARY KEY,   -- YYYY-MM-DD, UTC
+      pick              TEXT    NOT NULL,      -- JSON: the chosen post
+      created_at        INTEGER NOT NULL,
+      posted_channel_id TEXT
+    );
+
     -- Per-guild settings (ragebait channel + intensity, log channel override...).
     CREATE TABLE IF NOT EXISTS guild_config (
       guild_id            TEXT PRIMARY KEY,

@@ -3,10 +3,11 @@
 /**
  * Kaito — central interaction router.
  *
- * Handles three kinds of interaction:
+ * Handles four kinds of interaction:
  *   1. Slash commands            → command.execute(interaction)
  *   2. Autocomplete              → command.autocomplete(interaction)
  *   3. Buttons / select menus    → command.handleComponent(interaction, parts)
+ *   4. Modal submits             → command.handleModal(interaction, parts)
  *
  * Component routing convention: a custom ID is colon-separated and its FIRST
  * segment is the owning command's name, e.g. "poll:vote:2" is routed to the
@@ -83,6 +84,26 @@ module.exports = {
         await command.handleComponent(interaction, parts.slice(1));
       } catch (error) {
         logger.error(`Component handler failed for "${interaction.customId}":`, error);
+        await replyWithError(interaction, 'Something went wrong handling that.');
+      }
+      return;
+    }
+
+    // ── 4. Modal submits ─────────────────────────────────────────────────
+    // Same custom ID convention as components, e.g. "guess:submit".
+    if (interaction.isModalSubmit()) {
+      const parts = interaction.customId.split(':');
+      const command = client.commands.get(parts[0]);
+
+      if (typeof command?.handleModal !== 'function') {
+        logger.debug(`No modal handler for customId "${interaction.customId}"`);
+        return;
+      }
+
+      try {
+        await command.handleModal(interaction, parts.slice(1));
+      } catch (error) {
+        logger.error(`Modal handler failed for "${interaction.customId}":`, error);
         await replyWithError(interaction, 'Something went wrong handling that.');
       }
     }

@@ -29,10 +29,17 @@ function walk(dir) {
 
 /**
  * Load all commands into a Collection keyed by command name.
+ *
+ * At runtime a broken file is skipped so one bad command can't stop the bot
+ * booting. Registration is the opposite: it PUTs the whole command set, so a
+ * skipped file would silently DELETE that command from Discord. Hence `strict`.
+ *
+ * @param {{ strict?: boolean }} [options] — strict throws if any file failed.
  * @returns {Collection<string, object>}
  */
-function loadCommands() {
+function loadCommands({ strict = false } = {}) {
   const commands = new Collection();
+  const failures = [];
 
   for (const file of walk(COMMANDS_DIR)) {
     const relative = path.relative(COMMANDS_DIR, file);
@@ -41,6 +48,7 @@ function loadCommands() {
 
       // Shape check — a malformed file should be skipped loudly, not crash boot.
       if (!command?.data || typeof command.execute !== 'function') {
+        failures.push(`${relative}: missing "data" or "execute" export`);
         logger.warn(`Skipping ${relative}: missing "data" or "execute" export`);
         continue;
       }
@@ -50,8 +58,13 @@ function loadCommands() {
       commands.set(command.data.name, command);
       logger.debug(`Loaded command /${command.data.name} (${relative})`);
     } catch (error) {
+      failures.push(`${relative}: ${error.message}`);
       logger.error(`Failed to load command ${relative}:`, error);
     }
+  }
+
+  if (failures.length > 0 && strict) {
+    throw new Error(`Refusing to continue — ${failures.length} command file(s) failed to load:\n  • ${failures.join('\n  • ')}`);
   }
 
   logger.info(`Loaded ${commands.size} command(s)`);

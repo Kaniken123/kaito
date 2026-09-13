@@ -8,6 +8,7 @@
  */
 
 const { Events, ActivityType } = require('discord.js');
+const cursedFood = require('../services/cursedFood');
 const logger = require('../lib/logger');
 
 module.exports = {
@@ -23,5 +24,9 @@ module.exports = {
       activities: [{ name: '/help', type: ActivityType.Listening }],
       status: 'online',
     });
+
+    // Scheduled jobs start here, not at import time: they need a logged-in
+    // client, and this is the first moment we have one.
+    cursedFood.startDailyPost(client);
   },
 };
